@@ -1,81 +1,88 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { shaderMaterial } from '@react-three/drei';
 import { MathUtils } from 'three';
 import * as THREE from 'three';
 import { TREE, type TreeMode } from '../treeConfig';
 
-function createStarGeometry() {
-  const positions: number[] = [];
-  const outer = 1;
-  const inner = 0.4;
-  const points = 5;
-  const push = (angle: number, radius: number) => {
-    positions.push(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
-  };
-  for (let i = 0; i < points; i += 1) {
-    const outerAngle = (i / points) * Math.PI * 2 - Math.PI / 2;
-    const innerAngle = ((i + 0.5) / points) * Math.PI * 2 - Math.PI / 2;
-    const nextOuter = ((i + 1) / points) * Math.PI * 2 - Math.PI / 2;
-    positions.push(0, 0, 0);
-    push(outerAngle, outer);
-    push(innerAngle, inner);
-    positions.push(0, 0, 0);
-    push(innerAngle, inner);
-    push(nextOuter, outer);
+const vertexShader = /* glsl */ `
+  uniform float uScale;
+  uniform float uPixelRatio;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = clamp(uScale * uPixelRatio * 34.0, 10.0, 46.0);
+    gl_Position = projectionMatrix * mv;
   }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.computeVertexNormals();
-  return geometry;
-}
+`;
 
-type TopStarProps = {
-  mode: TreeMode;
+const fragmentShader = /* glsl */ `
+  void main() {
+    vec2 p = gl_PointCoord - vec2(0.5);
+    float d = length(p);
+    if (d > 0.5) discard;
+    float core = smoothstep(0.16, 0.0, d);
+    float arm = max(
+      smoothstep(0.5, 0.0, abs(p.y)) * smoothstep(0.035, 0.0, abs(p.x)),
+      smoothstep(0.5, 0.0, abs(p.x)) * smoothstep(0.035, 0.0, abs(p.y))
+    );
+    float diag = max(
+      smoothstep(0.28, 0.0, abs(p.x - p.y)) * smoothstep(0.02, 0.0, abs(p.x + p.y)),
+      smoothstep(0.28, 0.0, abs(p.x + p.y)) * smoothstep(0.02, 0.0, abs(p.x - p.y))
+    );
+    float alpha = max(core, arm * 0.8 + diag * 0.28);
+    vec3 color = vec3(0.97, 0.94, 0.88);
+    gl_FragColor = vec4(color * alpha, alpha);
+  }
+`;
+
+const GlintMaterial = shaderMaterial(
+  { uScale: 1, uPixelRatio: 1 },
+  vertexShader,
+  fragmentShader,
+);
+
+type GlintMaterialInstance = THREE.ShaderMaterial & {
+  uScale: number;
+  uPixelRatio: number;
 };
 
-const FORMED_Y = TREE.height / 2 + 0.42;
-const SCATTERED_Y = TREE.height / 2 + 2.8;
+const POINT = new Float32Array([0, 0, 0]);
+const FORMED_Y = TREE.height / 2 + 0.28;
+const SCATTERED_Y = TREE.height / 2 + 2.4;
 
-export default function TopStar({ mode }: TopStarProps) {
+export default function TopStar({ mode }: { mode: TreeMode }) {
   const groupRef = useRef<THREE.Group>(null);
   const progress = useRef(1);
-  const world = useMemo(() => new THREE.Vector3(), []);
-  const geometry = useMemo(() => createStarGeometry(), []);
-  const material = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        color: '#f8edd4',
-        toneMapped: false,
-        side: THREE.DoubleSide,
-      }),
-    [],
-  );
+  const material = useMemo(() => {
+    const next = new GlintMaterial() as GlintMaterialInstance;
+    next.transparent = true;
+    next.depthWrite = false;
+    next.blending = THREE.AdditiveBlending;
+    next.toneMapped = false;
+    next.uScale = 1;
+    return next;
+  }, []);
 
-  useEffect(
-    () => () => {
-      geometry.dispose();
-      material.dispose();
-    },
-    [geometry, material],
-  );
+  useEffect(() => () => material.dispose(), [material]);
 
   useFrame((state, delta) => {
     const group = groupRef.current;
     if (!group) return;
-    progress.current = MathUtils.damp(progress.current, mode === 'formed' ? 1 : 0, 1.65, delta);
+    progress.current = MathUtils.damp(progress.current, mode === 'formed' ? 1 : 0, 1.45, delta);
     const t = progress.current;
-    const time = state.clock.elapsedTime;
-    group.scale.setScalar(0.16 + t * 0.7);
     group.position.y = MathUtils.lerp(SCATTERED_Y, FORMED_Y, t);
-    group.getWorldPosition(world);
-    const camera = state.camera.position;
-    group.rotation.y = Math.atan2(camera.x - world.x, camera.z - world.z);
-    group.rotation.z = Math.sin(time * 0.45) * 0.04;
+    material.uScale = 0.35 + t * 0.65;
+    material.uPixelRatio = state.gl.getPixelRatio();
   });
 
   return (
     <group ref={groupRef} position={[0, FORMED_Y, 0]}>
-      <mesh geometry={geometry} material={material} />
+      <points frustumCulled={false}>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[POINT, 3]} />
+        </bufferGeometry>
+        <primitive object={material} attach="material" />
+      </points>
     </group>
   );
 }

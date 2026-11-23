@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { OrbitControls, PerspectiveCamera, Stars } from '@react-three/drei';
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
-import { COLORS, type Quality, type TreeMode } from '../treeConfig';
-import ParticleField from './ParticleField';
+import { type Quality, type TreeMode } from '../treeConfig';
+import Atmosphere from './Atmosphere';
+import ParticleField, { ForegroundBokeh } from './ParticleField';
 import TopStar from './TopStar';
 
 type ExperienceProps = {
@@ -17,53 +18,50 @@ export default function Experience({ mode, autoRotate, motion, quality }: Experi
 
   return (
     <>
-      <color attach="background" args={[COLORS.navy]} />
-      <PerspectiveCamera makeDefault position={[1.8, 0.05, 16.8]} fov={32} near={0.1} far={140} />
+      <PerspectiveCamera makeDefault position={[0.9, 0.15, 19.2]} fov={28} near={0.1} far={200} />
       <OrbitControls
         enablePan={false}
         enableDamping
         dampingFactor={0.08}
-        rotateSpeed={0.7}
-        zoomSpeed={0.65}
+        rotateSpeed={0.65}
+        zoomSpeed={0.6}
         autoRotate={autoRotate && !interacting}
-        autoRotateSpeed={0.45}
+        autoRotateSpeed={0.35}
         minDistance={12}
-        maxDistance={68}
-        minPolarAngle={Math.PI / 3.4}
-        maxPolarAngle={Math.PI / 1.65}
-        target={[0, -0.85, 0]}
+        maxDistance={48}
+        minPolarAngle={Math.PI / 3.2}
+        maxPolarAngle={Math.PI / 1.7}
+        target={[0, -0.15, 0]}
         onStart={() => setInteracting(true)}
         onEnd={() => setInteracting(false)}
       />
 
+      <Atmosphere />
       <Stars
-        radius={90}
-        depth={40}
+        radius={55}
+        depth={30}
         count={quality.stars}
-        factor={2.4}
+        factor={2.1}
         saturation={0}
         fade
-        speed={motion * 0.35}
+        speed={motion * 0.15}
       />
 
-      <ambientLight intensity={0.22} color="#24324d" />
-      <pointLight position={[8, 12, 14]} intensity={28} color="#ffe3b8" distance={80} decay={2} />
-      <pointLight position={[-12, 3, -10]} intensity={12} color="#d7c094" distance={70} decay={2} />
-
-      <group position={[0, -1.85, 0]}>
-        <ParticleField count={quality.foliage} kind="foliage" mode={mode} motion={motion} />
-        <ParticleField count={quality.lights} kind="lights" mode={mode} motion={motion} />
+      <group position={[0, -0.15, 0]}>
+        <ParticleField count={quality.foliage} mode={mode} motion={motion} />
         <TopStar mode={mode} />
       </group>
+      <ForegroundBokeh count={quality.bokeh} motion={motion} />
 
-      <EffectComposer multisampling={quality.antialias ? 2 : 0}>
+      <EffectComposer multisampling={0}>
         <Bloom
-          luminanceThreshold={0.58}
-          luminanceSmoothing={0.28}
+          luminanceThreshold={0.92}
+          luminanceSmoothing={0.2}
           intensity={quality.bloom}
-          radius={0.4}
+          radius={0.25}
+          mipmapBlur={false}
         />
-        <Vignette eskil={false} offset={0.16} darkness={0.82} />
+        <Vignette eskil={false} offset={0.22} darkness={0.55} />
       </EffectComposer>
     </>
   );

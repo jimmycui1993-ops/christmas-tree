@@ -1,9 +1,9 @@
 :root {
   color-scheme: dark;
-  --navy: #07111e;
-  --champagne: #f3e6c8;
-  --gold: #e4c98a;
-  --line: rgba(228, 201, 138, 0.46);
+  --indigo: #0c1424;
+  --ivory: #f4efe6;
+  --mist: #c5d5e0;
+  --line: rgba(183, 208, 220, 0.42);
   font-family: "Iowan Old Style", Palatino, "Palatino Linotype", "Songti SC", "STSong",
     "Noto Serif CJK SC", "Source Han Serif SC", "WenQuanYi Micro Hei", "Droid Sans Fallback", serif;
 }
@@ -18,7 +18,7 @@ body,
   margin: 0;
   width: 100%;
   height: 100%;
-  background: var(--navy);
+  background: var(--indigo);
   overflow: hidden;
 }
 
@@ -27,26 +27,18 @@ body {
   min-height: 100%;
 }
 
-button,
-input {
+button {
   font-family: inherit;
 }
 
 .stage {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: var(--navy);
-  user-select: none;
-}
-
-.viewport {
-  position: relative;
-  flex: 1;
-  min-height: 0;
+  background: var(--indigo);
   touch-action: none;
+  user-select: none;
 }
 
 .stage canvas {
@@ -62,42 +54,62 @@ input {
 }
 
 .greeting {
-  position: relative;
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  left: 16px;
+  right: 16px;
   z-index: 2;
-  flex: 0 0 auto;
   text-align: center;
-  color: var(--champagne);
-  padding: max(16px, env(safe-area-inset-top)) 16px 14px;
   pointer-events: none;
+  color: var(--ivory);
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  text-indent: 0.28em;
+  color: rgba(197, 213, 224, 0.82);
 }
 
 .greeting h1 {
-  margin: 0;
+  margin: 8px 0 0;
   font-weight: 500;
-  font-size: clamp(30px, 5.4vw, 58px);
-  letter-spacing: 0.42em;
-  padding-left: 0.42em;
-  line-height: 1.15;
+  font-size: clamp(20px, 2.5vw, 32px);
+  letter-spacing: 0.16em;
+  line-height: 1.2;
 }
 
-.greeting p {
-  margin: 10px 0 0;
-  font-size: clamp(12px, 1.7vw, 16px);
-  letter-spacing: 0.34em;
-  padding-left: 0.34em;
-  color: rgba(243, 230, 200, 0.78);
+.wish {
+  margin: 8px 0 0;
+  font-size: clamp(12px, 1.35vw, 14px);
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+  color: rgba(244, 239, 230, 0.78);
+}
+
+.orchid {
+  position: absolute;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 2;
+  width: 108px;
+  height: auto;
+  opacity: 0.9;
+  pointer-events: none;
 }
 
 .dock {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: max(12px, env(safe-area-inset-bottom));
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
   z-index: 2;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  width: min(460px, calc(100% - 150px));
   pointer-events: none;
 }
 
@@ -107,46 +119,41 @@ input {
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
-  width: min(560px, 100%);
+  width: 100%;
 }
 
 .controls button {
-  flex: 1 1 132px;
-  min-height: 44px;
-  padding: 10px 14px;
+  flex: 1 1 112px;
+  min-height: 40px;
+  padding: 8px 12px;
   border-radius: 999px;
   border: 1px solid var(--line);
-  background: rgba(7, 17, 30, 0.42);
-  color: var(--champagne);
-  letter-spacing: 0.18em;
-  font-size: 13px;
+  background: rgba(12, 20, 36, 0.38);
+  color: var(--ivory);
+  letter-spacing: 0.14em;
+  font-size: 12px;
   line-height: 1;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(8px);
   cursor: pointer;
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
 }
 
-.controls button:hover {
-  border-color: rgba(243, 230, 200, 0.8);
-}
-
+.controls button:hover,
 .controls button[aria-pressed='true'] {
-  background: rgba(228, 201, 138, 0.18);
-  border-color: rgba(243, 230, 200, 0.92);
-  color: #fff8ea;
+  background: rgba(183, 208, 220, 0.16);
+  border-color: rgba(244, 239, 230, 0.7);
 }
 
 .controls button:focus-visible {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--mist);
   outline-offset: 3px;
 }
 
 .hint {
   margin: 0;
-  color: rgba(243, 230, 200, 0.48);
-  font-size: 11px;
-  letter-spacing: 0.22em;
-  padding-left: 0.22em;
+  color: rgba(197, 213, 224, 0.55);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
 }
 
 .sr-only {
@@ -163,28 +170,28 @@ input {
 
 @media (max-width: 640px) {
   .greeting h1 {
-    letter-spacing: 0.28em;
-    padding-left: 0.28em;
+    letter-spacing: 0.08em;
   }
 
-  .greeting p,
+  .eyebrow,
+  .wish,
   .hint {
-    letter-spacing: 0.16em;
-    padding-left: 0.16em;
+    letter-spacing: 0.08em;
+    text-indent: 0;
+  }
+
+  .orchid {
+    width: 64px;
+    opacity: 0.7;
+  }
+
+  .dock {
+    width: min(100% - 24px, 420px);
+    left: 50%;
   }
 
   .controls button {
-    letter-spacing: 0.12em;
-    font-size: 13px;
-  }
-}
-
-@media (max-height: 680px) {
-  .greeting h1 {
-    font-size: 28px;
-  }
-
-  .greeting p {
-    margin-top: 4px;
+    letter-spacing: 0.08em;
+    min-height: 42px;
   }
 }

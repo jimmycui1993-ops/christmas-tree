@@ -1,31 +1,33 @@
 import * as THREE from 'three';
 
 /**
- * Visual settings for the birthday particle tree.
- * Derived from the upstream Christmas-tree CONFIG (foliage counts, tree
- * proportions, and the formed/scattered morph). Photographs, polaroid
- * frames, and the camera gesture path are intentionally absent.
+ * Birthday particle tree.
+ * The formed/scattered morph comes from moleculemmeng020425/christmas-tree (MIT).
+ * Palette and the orchid line are taken from the Laura gift design: cream,
+ * mist blue, a little champagne, and a white phalaenopsis with a pale pink center.
+ * No photographs.
  */
 export const TREE = {
-  height: 8.8,
-  radius: 3.85,
+  height: 6.6,
+  radius: 2.62,
 };
 
 export const COLORS = {
-  navy: '#07111e',
-  champagne: '#f3e6c8',
-  gold: '#e4c98a',
+  indigo: '#0c1424',
+  ivory: '#f4efe6',
+  mist: '#c5d5e0',
+  champagne: '#e4d3ae',
+  pink: '#f0c9cf',
 };
 
-const FOLIAGE_COLORS = ['#fff6e4', '#f3e6c8', '#e4c98a', '#d4b56d', '#c6a15b'].map(
-  (hex) => new THREE.Color(hex),
-);
-const LIGHT_COLORS = ['#fffaf2', '#ffe7b8', '#f6d48a'].map((hex) => new THREE.Color(hex));
-const TRUNK_COLOR = new THREE.Color('#6d5130');
+const IVORY = new THREE.Color('#f3eee6');
+const MIST = new THREE.Color('#b7cdd9');
+const MIST_DEEP = new THREE.Color('#8eafc0');
+const CHAMPAGNE = new THREE.Color('#e6d3aa');
 
 export type Quality = {
   foliage: number;
-  lights: number;
+  bokeh: number;
   stars: number;
   dpr: [number, number];
   bloom: number;
@@ -43,21 +45,21 @@ export function detectQuality(): Quality {
 
   if (low) {
     return {
-      foliage: 6200,
-      lights: 180,
-      stars: 700,
-      dpr: [1, 1.25],
-      bloom: 0.36,
+      foliage: 9000,
+      bokeh: 10,
+      stars: 900,
+      dpr: [1, 1.2],
+      bloom: 0.08,
       antialias: false,
     };
   }
 
   return {
-    foliage: 15000,
-    lights: 340,
-    stars: 1400,
-    dpr: [1, 1.6],
-    bloom: 0.5,
+    foliage: 18000,
+    bokeh: 16,
+    stars: 1800,
+    dpr: [1, 1.5],
+    bloom: 0.1,
     antialias: true,
   };
 }
@@ -71,76 +73,99 @@ export type ParticleField = {
   targets: Float32Array;
   colors: Float32Array;
   randoms: Float32Array;
+  sizes: Float32Array;
 };
 
-function starPosition(out: number[]) {
-  const radius = 14 + Math.sqrt(Math.random()) * 32;
+const TIERS = 7;
+
+function starfieldPosition(out: number[], spread: number) {
+  const radius = spread * (0.25 + Math.pow(Math.random(), 0.65));
   const theta = Math.random() * Math.PI * 2;
   const phi = Math.acos(2 * Math.random() - 1);
   out[0] = radius * Math.sin(phi) * Math.cos(theta);
-  out[1] = radius * Math.cos(phi) * 0.7;
+  out[1] = radius * Math.cos(phi) * 0.62;
   out[2] = radius * Math.sin(phi) * Math.sin(theta);
 }
 
-function canopyPosition(out: number[], shellBias: number) {
-  const y01 = Math.pow(Math.random(), 0.9);
+function branchPosition(out: number[]) {
+  const tier = Math.min(TIERS - 1, Math.floor(Math.pow(Math.random(), 1.15) * TIERS));
+  const along = Math.random();
+  const y01 = Math.min(0.98, (tier + 0.12 + along * 0.78) / TIERS);
   const y = (y01 - 0.5) * TREE.height;
-  const tiers = 8;
-  const tier = (y01 * tiers) % 1;
-  const taper = Math.max(0.045, 1 - y01);
-  const branch = 0.7 + 0.3 * Math.pow(1 - tier, 0.55);
-  const radius = TREE.radius * taper * branch;
-  const radial = Math.pow(Math.random(), shellBias);
+  const taper = Math.pow(1 - y01, 0.86);
+  const rim = Math.random() < 0.7 ? 0.74 + Math.random() * 0.26 : 0.38 + Math.random() * 0.36;
+  const radius = Math.max(0.045, TREE.radius * taper * rim);
+  const sprays = 10;
+  const spray = Math.floor(Math.random() * sprays);
+  const theta = (spray / sprays) * Math.PI * 2 + (Math.random() - 0.5) * 0.55;
+  const droop = rim * rim * 0.32;
+  out[0] = Math.cos(theta) * radius;
+  out[1] = y - droop;
+  out[2] = Math.sin(theta) * radius;
+}
+
+function spinePosition(out: number[]) {
+  const y01 = Math.pow(Math.random(), 0.85) * 0.96;
   const theta = Math.random() * Math.PI * 2;
-  out[0] = Math.cos(theta) * radius * radial;
-  out[1] = y;
-  out[2] = Math.sin(theta) * radius * radial;
+  const radius = Math.random() * 0.07;
+  out[0] = Math.cos(theta) * radius;
+  out[1] = (y01 - 0.5) * TREE.height;
+  out[2] = Math.sin(theta) * radius;
 }
 
 function trunkPosition(out: number[]) {
-  const y = -TREE.height / 2 - Math.random() * 0.85;
+  const y = -TREE.height / 2 - Math.random() * 0.55;
   const theta = Math.random() * Math.PI * 2;
-  const radius = Math.sqrt(Math.random()) * 0.42;
+  const radius = Math.sqrt(Math.random()) * 0.12;
   out[0] = Math.cos(theta) * radius;
   out[1] = y;
   out[2] = Math.sin(theta) * radius;
 }
 
-function writeColor(target: Float32Array, index: number, color: THREE.Color, mix = 1) {
+function writeColor(target: Float32Array, index: number, color: THREE.Color) {
   const offset = index * 3;
-  target[offset] = color.r * mix;
-  target[offset + 1] = color.g * mix;
-  target[offset + 2] = color.b * mix;
+  const wobble = 0.94 + Math.random() * 0.08;
+  target[offset] = color.r * wobble;
+  target[offset + 1] = color.g * wobble;
+  target[offset + 2] = color.b * wobble;
 }
 
-export function createParticleField(count: number, kind: 'foliage' | 'lights'): ParticleField {
+export function createParticleField(count: number): ParticleField {
   const positions = new Float32Array(count * 3);
   const targets = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   const randoms = new Float32Array(count);
-  const star = [0, 0, 0];
+  const sizes = new Float32Array(count);
+  const scattered = [0, 0, 0];
   const formed = [0, 0, 0];
 
-  for (let i = 0; i < count; i++) {
-    starPosition(star);
-    positions[i * 3] = star[0];
-    positions[i * 3 + 1] = star[1];
-    positions[i * 3 + 2] = star[2];
+  for (let i = 0; i < count; i += 1) {
+    starfieldPosition(scattered, 22);
+    positions[i * 3] = scattered[0];
+    positions[i * 3 + 1] = scattered[1];
+    positions[i * 3 + 2] = scattered[2];
     randoms[i] = Math.random();
 
-    if (kind === 'lights') {
-      canopyPosition(formed, 0.25);
-      formed[1] = Math.min(formed[1], TREE.height * 0.42);
-      const color = LIGHT_COLORS[i % LIGHT_COLORS.length];
-      writeColor(colors, i, color, 1);
+    const roll = Math.random();
+    if (roll < 0.03) {
+      trunkPosition(formed);
+      writeColor(colors, i, MIST_DEEP);
+      sizes[i] = 0.65 + Math.random() * 0.3;
+    } else if (roll < 0.07) {
+      spinePosition(formed);
+      writeColor(colors, i, MIST);
+      sizes[i] = 0.55 + Math.random() * 0.25;
     } else {
-      const roll = Math.random();
-      if (roll < 0.05) {
-        trunkPosition(formed);
-        writeColor(colors, i, TRUNK_COLOR, 1);
+      branchPosition(formed);
+      if (roll < 0.16) {
+        writeColor(colors, i, CHAMPAGNE);
+        sizes[i] = 1.15 + Math.random() * 0.45;
+      } else if (roll < 0.4) {
+        writeColor(colors, i, MIST);
+        sizes[i] = 0.75 + Math.random() * 0.45;
       } else {
-        canopyPosition(formed, 0.38);
-        writeColor(colors, i, FOLIAGE_COLORS[i % FOLIAGE_COLORS.length], 1);
+        writeColor(colors, i, IVORY);
+        sizes[i] = 0.8 + Math.random() * 0.5;
       }
     }
 
@@ -149,5 +174,31 @@ export function createParticleField(count: number, kind: 'foliage' | 'lights'): 
     targets[i * 3 + 2] = formed[2];
   }
 
-  return { positions, targets, colors, randoms };
+  return { positions, targets, colors, randoms, sizes };
+}
+
+export function createBokeh(count: number): ParticleField {
+  const positions = new Float32Array(count * 3);
+  const targets = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const randoms = new Float32Array(count);
+  const sizes = new Float32Array(count);
+  const palette = [IVORY, MIST, CHAMPAGNE];
+
+  for (let i = 0; i < count; i += 1) {
+    const x = (Math.random() - 0.5) * 16;
+    const y = (Math.random() - 0.5) * 10;
+    const z = 3.5 + Math.random() * 5.5;
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+    targets[i * 3] = x;
+    targets[i * 3 + 1] = y;
+    targets[i * 3 + 2] = z;
+    randoms[i] = Math.random();
+    sizes[i] = 0.7 + Math.random() * 0.8;
+    writeColor(colors, i, palette[i % palette.length]);
+  }
+
+  return { positions, targets, colors, randoms, sizes };
 }
