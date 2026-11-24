@@ -202,10 +202,22 @@ button {
   opacity: 0;
 }
 
-.viewer-dust {
+.viewer-dust,
+.dust-host {
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+.dust-dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #e7eef3;
+  box-shadow: 0 0 6px rgba(228, 211, 174, 0.8);
 }
 
 .reveal {

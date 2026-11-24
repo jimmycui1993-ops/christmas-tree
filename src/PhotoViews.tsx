@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { petalRects, type ScreenBox, type Story } from './stories/album'
 
 type ViewerProps = {
@@ -48,6 +48,15 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
   onExitedRef.current = onExited
   const place = stories.findIndex((item) => item.id === story.id) + 1
 
+  useLayoutEffect(() => {
+    const node = frameRef.current
+    if (!node || !origin) return
+    node.style.transform = `translate(${origin.x}px, ${origin.y}px)`
+    node.style.width = `${origin.w}px`
+    node.style.height = `${origin.h}px`
+    node.style.borderRadius = '50%'
+  }, [origin, story.id])
+
   useEffect(() => {
     setFailed(false)
   }, [story.id])
@@ -58,19 +67,62 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
     progressRef.current = reducedMotion || switching ? 1 : 0
     setPhase(phaseRef.current)
     exited.current = false
+    let closeTimer = 0
     const onPhotoClose = () => {
       if (phaseRef.current === 'closing') return
-      closeTarget.current = petalRects.get(story.id) ?? origin
-      closeFrom = progressRef.current
-      closeMark = performance.now()
       phaseRef.current = 'closing'
       setPhase('closing')
+      const node = frameRef.current
+      const to = petalRects.get(story.id) ?? origin
+      if (!node || !to || reducedMotion) {
+        finish()
+        return
+      }
+      const box = node.getBoundingClientRect()
+      const scale = Math.max(0.04, to.w / Math.max(1, box.width))
+      const tx = to.x
+      const ty = to.y + (to.h - box.height * scale) / 2
+      node.style.transformOrigin = '0 0'
+      node.style.width = `${box.width}px`
+      node.style.height = `${box.height}px`
+      const host = dustRef.current?.parentElement?.querySelector('.dust-host')
+      const dots = Array.from({ length: 14 }, () => {
+        const dot = document.createElement('i')
+        dot.className = 'dust-dot'
+        host?.appendChild(dot)
+        return dot
+      })
+      const started = performance.now()
+      let shown = 0
+      closeTimer = window.setInterval(() => {
+        const elapsed = Math.min(1, (performance.now() - started) / 800)
+        shown = Math.min(elapsed, shown + 0.04)
+        const s = 1 + (scale - 1) * shown
+        const x = box.x + (tx - box.x) * shown
+        const y = box.y + (ty - box.y) * shown
+        node.style.transform = `translate(${x}px, ${y}px) scale(${s})`
+        node.style.clipPath = shown > 0.62 ? 'circle(50% at 50% 50%)' : 'inset(0% round 18px)'
+        if (scrimRef.current) scrimRef.current.style.opacity = String(0.94 * (1 - shown))
+        if (coverRef.current) coverRef.current.style.opacity = String(Math.min(1, shown * 1.3))
+        if (fullRef.current) fullRef.current.style.opacity = String(1 - Math.min(1, shown * 1.1))
+        dots.forEach((dot, index) => {
+          const along = Math.min(1, Math.max(0, shown * 1.15 - index * 0.03))
+          const px = box.x + (tx - box.x) * along + box.width * (0.15 + (index % 5) * 0.16) * (1 - along)
+          const py = box.y + (ty - box.y) * along + ((index % 2 === 0 ? -18 : 18) * along)
+          dot.style.opacity = String(along * (1 - shown) * 0.9)
+          dot.style.transform = `translate(${px}px, ${py}px)`
+        })
+        if (shown >= 1) {
+          window.clearInterval(closeTimer)
+          finish()
+        }
+      }, 16)
     }
     window.addEventListener('photo-close', onPhotoClose)
     const dust: { x: number; y: number; vx: number; vy: number; life: number; color: string; size: number }[] = []
     const openMark = performance.now()
-    let closeMark = 0
-    let closeFrom = 1
+    const closeMark = 0
+    const closeFrom = 1
     let last = openMark
     let raf = 0
     const colors = ['#f4efe6', '#d5e4ee', '#e7d7b4']
@@ -82,9 +134,13 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
     }
 
     const draw = (now: number) => {
+      if (phaseRef.current === 'closing') {
+        raf = requestAnimationFrame(draw)
+        return
+      }
       const dt = Math.min(34, now - last)
       last = now
-      const closing = phaseRef.current === 'closing'
+      const closing = false
       if (phaseRef.current === 'opening') {
         const dur = reducedMotion ? 16 : 820
         progressRef.current = Math.min(1, (now - openMark) / dur)
@@ -180,15 +236,12 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
         phaseRef.current = 'open'
         setPhase('open')
       }
-      if (phaseRef.current === 'closing' && progressRef.current <= 0) {
-        finish()
-        return
-      }
       raf = requestAnimationFrame(draw)
     }
     raf = requestAnimationFrame(draw)
     return () => {
       cancelAnimationFrame(raf)
+      window.clearInterval(closeTimer)
       window.removeEventListener('photo-close', onPhotoClose)
     }
   }, [origin, reducedMotion, story])
@@ -223,20 +276,8 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
     >
       <div ref={scrimRef} className="viewer-scrim" onPointerUp={requestClose} />
       <canvas ref={dustRef} className="viewer-dust" />
-      <div
-        ref={frameRef}
-        className="reveal"
-        style={
-          origin
-            ? {
-                transform: `translate(${origin.x}px, ${origin.y}px)`,
-                width: origin.w,
-                height: origin.h,
-                borderRadius: '50%',
-              }
-            : undefined
-        }
-      >
+      <div className="dust-host" />
+      <div ref={frameRef} className="reveal">
         {failed ? (
           <p className="viewer-miss">这张照片没有加载出来</p>
         ) : (
