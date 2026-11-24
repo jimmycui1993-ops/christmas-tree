@@ -225,10 +225,12 @@ button {
 
 .reveal-cover {
   object-fit: cover;
+  opacity: 1;
 }
 
 .reveal-full {
   object-fit: contain;
+  opacity: 0;
 }
 
 .viewer-chrome {

@@ -13,7 +13,7 @@ type ViewerProps = {
 
 type Frame = { x: number; y: number; w: number; h: number }
 
-const ease = (t: number) => 1 - (1 - t) ** 3
+const smooth = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2)
 
 const containFrame = (story: Story, width: number, height: number): Frame => {
   const maxW = Math.min(width * 0.88, 1100)
@@ -93,7 +93,7 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
         const t = Math.min(1, (now - closeMark) / dur)
         progressRef.current = closeFrom * (1 - t)
       }
-      const shown = ease(progressRef.current)
+      const shown = closing ? closeFrom * (1 - smooth(Math.min(1, (now - closeMark) / (reducedMotion ? 16 : 680)))) : smooth(progressRef.current)
       const viewW = window.innerWidth
       const viewH = window.innerHeight
       const from = closing ? closeTarget.current ?? origin : origin
@@ -223,7 +223,20 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
     >
       <div ref={scrimRef} className="viewer-scrim" onPointerUp={requestClose} />
       <canvas ref={dustRef} className="viewer-dust" />
-      <div ref={frameRef} className="reveal">
+      <div
+        ref={frameRef}
+        className="reveal"
+        style={
+          origin
+            ? {
+                transform: `translate(${origin.x}px, ${origin.y}px)`,
+                width: origin.w,
+                height: origin.h,
+                borderRadius: '50%',
+              }
+            : undefined
+        }
+      >
         {failed ? (
           <p className="viewer-miss">这张照片没有加载出来</p>
         ) : (
