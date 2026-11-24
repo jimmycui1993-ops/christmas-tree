@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { MathUtils } from 'three'
 import * as THREE from 'three'
 import { TREE, type TreeMode } from '../treeConfig'
-import { planeSize, type Story } from '../stories/album'
+import { petalRects, planeSize, type Story } from '../stories/album'
 
 type ReadyStory = {
   story: Story
@@ -15,6 +15,7 @@ type StoryPetalsProps = {
   mode: TreeMode
   motion: number
   compact: boolean
+  activeId: string | null
   onOpen: (id: string) => void
 }
 
@@ -77,6 +78,7 @@ function Petal({
   mode,
   motion,
   compact,
+  activeId,
   onOpen,
   onBounds,
 }: {
@@ -86,6 +88,7 @@ function Petal({
   mode: TreeMode
   motion: number
   compact: boolean
+  activeId: string | null
   onOpen: (id: string) => void
   onBounds: (id: string, bounds: { minX: number; minY: number; maxX: number; maxY: number }) => void
 }) {
@@ -96,26 +99,68 @@ function Petal({
     [compact, index, count, ready.story.index],
   )
   const fitted = planeSize(ready.story.width, ready.story.height)
-  const width = fitted[0] * (compact ? 0.72 : 1)
-  const height = fitted[1] * (compact ? 0.72 : 1)
+  const side = Math.min(fitted[0], fitted[1]) * (compact ? 0.92 : 1.02)
   const material = useMemo(() => {
-    const next = new THREE.MeshBasicMaterial({
-      map: ready.texture,
+    const next = new THREE.ShaderMaterial({
       transparent: true,
-      toneMapped: true,
       depthWrite: false,
+      toneMapped: true,
+      uniforms: {
+        uMap: { value: ready.texture },
+        uAspect: { value: ready.story.width / ready.story.height },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D uMap;
+        uniform float uAspect;
+        varying vec2 vUv;
+        void main() {
+          vec2 uv = vUv;
+          if (uAspect > 1.0) uv.x = (uv.x - 0.5) / uAspect + 0.5;
+          else uv.y = (uv.y - 0.5) * uAspect + 0.5;
+          vec4 tex = texture2D(uMap, uv);
+          float d = length(vUv - 0.5);
+          float alpha = smoothstep(0.5, 0.46, d);
+          if (alpha <= 0.001) discard;
+          float rim = smoothstep(0.34, 0.48, d);
+          vec3 color = mix(tex.rgb, vec3(0.96, 0.93, 0.86), rim * 0.18);
+          gl_FragColor = vec4(color, tex.a * alpha);
+        }
+      `,
     })
     return next
-  }, [ready.texture])
+  }, [ready.story.height, ready.story.width, ready.texture])
   const glow = useMemo(
     () =>
-      new THREE.MeshBasicMaterial({
-        color: '#d7e6ee',
+      new THREE.ShaderMaterial({
         transparent: true,
-        opacity: 0.16,
-        toneMapped: false,
         depthWrite: false,
+        toneMapped: false,
         blending: THREE.AdditiveBlending,
+        uniforms: {},
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          varying vec2 vUv;
+          void main() {
+            float d = length(vUv - 0.5);
+            float ring = smoothstep(0.34, 0.46, d) * smoothstep(0.5, 0.46, d);
+            vec3 mist = vec3(0.78, 0.88, 0.93);
+            vec3 gold = vec3(0.91, 0.84, 0.68);
+            gl_FragColor = vec4(mix(mist, gold, ring), ring * 0.55);
+          }
+        `,
       }),
     [],
   )
@@ -152,7 +197,7 @@ function Petal({
       const parentScale = node.parent?.getWorldScale(corner).x || 1
       const unit = (2 * Math.tan(THREE.MathUtils.degToRad(fov) / 2) * depth) / state.size.height / parentScale
       for (let step = 0; step < 6; step += 1) {
-        const box = projectCorners(node, width, height, state.camera, state.size)
+        const box = projectCorners(node, side, side, state.camera, state.size)
         const overflowLeft = Math.max(0, safe.minX - box.minX)
         const overflowRight = Math.max(0, box.maxX - safe.maxX)
         const overflowTop = Math.max(0, safe.minY - box.minY)
@@ -164,13 +209,13 @@ function Petal({
         node.lookAt(state.camera.position)
       }
     }
-    onBounds(ready.story.id, projectCorners(node, width, height, state.camera, state.size))
+    onBounds(ready.story.id, projectCorners(node, side, side, state.camera, state.size))
   })
 
   return (
-    <group ref={group}>
-      <mesh position={[0, 0, -0.02]} material={glow}>
-        <planeGeometry args={[width * 1.08, height * 1.08]} />
+    <group ref={group} visible={activeId !== ready.story.id}>
+      <mesh position={[0, 0, -0.01]} material={glow}>
+        <planeGeometry args={[side * 1.22, side * 1.22]} />
       </mesh>
       <mesh
         material={material}
@@ -186,13 +231,13 @@ function Petal({
           document.body.style.cursor = ''
         }}
       >
-        <planeGeometry args={[width, height]} />
+        <planeGeometry args={[side, side]} />
       </mesh>
     </group>
   )
 }
 
-export default function StoryPetals({ stories, mode, motion, compact, onOpen }: StoryPetalsProps) {
+export default function StoryPetals({ stories, mode, motion, compact, activeId, onOpen }: StoryPetalsProps) {
   const [ready, setReady] = useState<ReadyStory[]>([])
   const bounds = useRef(new Map<string, { minX: number; minY: number; maxX: number; maxY: number }>())
   const reportBounds = (id: string, box: { minX: number; minY: number; maxX: number; maxY: number }) => {
@@ -210,6 +255,18 @@ export default function StoryPetals({ stories, mode, motion, compact, onOpen }: 
       maxY = Math.max(maxY, item.maxY)
     })
     main.dataset.petalBox = [Math.round(minX), Math.round(minY), Math.round(maxX), Math.round(maxY)].join(',')
+    const size = Math.min(box.maxX - box.minX, box.maxY - box.minY)
+    const cx = (box.minX + box.maxX) / 2
+    const cy = (box.minY + box.maxY) / 2
+    petalRects.set(id, { x: cx - size / 2, y: cy - size / 2, w: size, h: size })
+    const listed = [...petalRects.entries()].map(([key, rect]) => ({
+      id: key,
+      x: Math.round(rect.x),
+      y: Math.round(rect.y),
+      w: Math.round(rect.w),
+      h: Math.round(rect.h),
+    }))
+    main.dataset.petalRects = JSON.stringify(listed)
   }
 
   useEffect(() => {
@@ -261,6 +318,7 @@ export default function StoryPetals({ stories, mode, motion, compact, onOpen }: 
           mode={mode}
           motion={motion}
           compact={compact}
+          activeId={activeId}
           onOpen={onOpen}
           onBounds={reportBounds}
         />

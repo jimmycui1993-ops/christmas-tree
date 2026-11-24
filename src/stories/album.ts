@@ -1,3 +1,7 @@
+export type ScreenBox = { x: number; y: number; w: number; h: number }
+
+export const petalRects = new Map<string, ScreenBox>()
+
 export type Story = {
   id: string
   index: number

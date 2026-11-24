@@ -14,6 +14,7 @@ type ExperienceProps = {
   motion: number;
   quality: Quality;
   stories: Story[];
+  activeId: string | null;
   controlsEnabled: boolean;
   onOpenStory: (id: string) => void;
 };
@@ -24,6 +25,7 @@ export default function Experience({
   motion,
   quality,
   stories,
+  activeId,
   controlsEnabled,
   onOpenStory,
 }: ExperienceProps) {
@@ -74,6 +76,7 @@ export default function Experience({
           mode={mode}
           motion={motion}
           compact={quality.compact}
+          activeId={activeId}
           onOpen={onOpenStory}
         />
         <TopStar mode={mode} />

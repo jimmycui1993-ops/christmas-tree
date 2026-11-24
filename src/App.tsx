@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import Experience from './scene/Experience';
 import OrchidMark from './OrchidMark';
 import { AlbumSheet, PhotoViewer } from './PhotoViews';
-import { erasIn, loadAlbum, pickPetals, type Story } from './stories/album';
+import { erasIn, loadAlbum, petalRects, pickPetals, type ScreenBox, type Story } from './stories/album';
 import { COLORS, detectQuality, prefersReducedMotion, type TreeMode } from './treeConfig';
 
 /**
@@ -21,6 +21,7 @@ export default function App() {
   const [autoRotate, setAutoRotate] = useState(() => !prefersReducedMotion());
   const [status, setStatus] = useState('粒子已聚合成树');
   const [openId, setOpenId] = useState<string | null>(null);
+  const [origin, setOrigin] = useState<ScreenBox | null>(null);
   const [albumOpen, setAlbumOpen] = useState(false);
 
   useEffect(() => {
@@ -55,7 +56,7 @@ export default function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        if (openId) setOpenId(null);
+        if (openId) window.dispatchEvent(new CustomEvent('photo-close'));
         else setAlbumOpen(false);
         return;
       }
@@ -81,6 +82,7 @@ export default function App() {
       data-petals={petals.length}
       data-era={era}
       data-viewer={openStory ? openStory.index : ''}
+      data-viewer-motion={reducedMotion ? 'reduced' : 'full'}
       data-album={albumOpen ? 'open' : 'closed'}
     >
       <Canvas
@@ -104,8 +106,11 @@ export default function App() {
           motion={reducedMotion ? 0 : 1}
           quality={quality}
           stories={petals}
+          activeId={openId}
           controlsEnabled={!overlayOpen}
           onOpenStory={(id) => {
+            const rect = petalRects.get(id);
+            setOrigin(rect ? { ...rect } : null);
             setAlbumOpen(false);
             setOpenId(id);
           }}
@@ -157,6 +162,13 @@ export default function App() {
         <AlbumSheet
           stories={filtered}
           onOpen={(id) => {
+            const rect = petalRects.get(id) ?? {
+              x: window.innerWidth / 2 - 28,
+              y: window.innerHeight / 2 - 28,
+              w: 56,
+              h: 56,
+            };
+            setOrigin(rect);
             setAlbumOpen(false);
             setOpenId(id);
           }}
@@ -168,8 +180,9 @@ export default function App() {
           stories={filtered}
           total={stories.length}
           story={openStory}
+          origin={origin}
           reducedMotion={reducedMotion}
-          onClose={() => setOpenId(null)}
+          onExited={() => setOpenId(null)}
           onStep={stepStory}
         />
       )}
