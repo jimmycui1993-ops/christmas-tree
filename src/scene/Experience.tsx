@@ -31,7 +31,13 @@ export default function Experience({
 
   return (
     <>
-      <PerspectiveCamera makeDefault position={[0.9, 0.15, 19.2]} fov={28} near={0.1} far={200} />
+      <PerspectiveCamera
+        makeDefault
+        position={quality.compact ? [0.35, 0.55, 21.4] : [0.9, 0.15, 19.2]}
+        fov={quality.compact ? 30 : 28}
+        near={0.1}
+        far={200}
+      />
       <OrbitControls
         enabled={controlsEnabled}
         enablePan={false}
@@ -45,7 +51,7 @@ export default function Experience({
         maxDistance={48}
         minPolarAngle={Math.PI / 3.2}
         maxPolarAngle={Math.PI / 1.7}
-        target={[0, -0.15, 0]}
+        target={quality.compact ? [0, 0.15, 0] : [0, -0.15, 0]}
         onStart={() => setInteracting(true)}
         onEnd={() => setInteracting(false)}
       />
@@ -61,9 +67,15 @@ export default function Experience({
         speed={motion * 0.15}
       />
 
-      <group position={[0, -0.15, 0]}>
+      <group position={[0, quality.compact ? 0.32 : -0.15, 0]} scale={quality.compact ? 0.68 : 1}>
         <ParticleField count={quality.foliage} mode={mode} motion={motion} />
-        <StoryPetals stories={stories} mode={mode} motion={motion} onOpen={onOpenStory} />
+        <StoryPetals
+          stories={stories}
+          mode={mode}
+          motion={motion}
+          compact={quality.compact}
+          onOpen={onOpenStory}
+        />
         <TopStar mode={mode} />
       </group>
       <ForegroundBokeh count={quality.bokeh} motion={motion} />

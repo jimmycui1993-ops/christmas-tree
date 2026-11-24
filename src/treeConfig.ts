@@ -30,6 +30,7 @@ export type Quality = {
   bokeh: number;
   stars: number;
   petals: number;
+  compact: boolean;
   dpr: [number, number];
   bloom: number;
   antialias: boolean;
@@ -44,13 +45,15 @@ export function detectQuality(): Quality {
   const memory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8;
   const low = coarse || narrow || cores <= 4 || memory <= 4;
 
-  const petals = narrow || coarse ? 5 : 7;
+  const compact = narrow || coarse;
+  const petals = compact ? 5 : 7;
   if (low) {
     return {
       foliage: 9000,
       bokeh: 10,
       stars: 900,
       petals,
+      compact,
       dpr: [1, 1.2],
       bloom: 0.08,
       antialias: false,
@@ -62,6 +65,7 @@ export function detectQuality(): Quality {
     bokeh: 16,
     stars: 1800,
     petals,
+    compact,
     dpr: [1, 1.5],
     bloom: 0.1,
     antialias: true,
