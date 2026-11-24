@@ -13,6 +13,8 @@ type ViewerProps = {
 
 export function PhotoViewer({ stories, total, story, origin, reducedMotion, onExited, onStep }: ViewerProps) {
   const photoRef = useRef<HTMLImageElement>(null)
+  const shellRef = useRef<HTMLDivElement>(null)
+  const lineRef = useRef<HTMLDivElement>(null)
   const stopFlight = useRef<(() => void) | null>(null)
   const flew = useRef(false)
   const closed = useRef(false)
@@ -57,9 +59,11 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
       const timer = window.setInterval(() => {
         const p = Math.min(1, (performance.now() - started) / 680)
         node.style.transform = `translate(${dx * (1 - p)}px, ${dy * (1 - p)}px) scale(${scale + (1 - scale) * p})`
+        paintGuide(p, false)
         if (p >= 1) {
           window.clearInterval(timer)
           node.style.transform = ''
+          paintGuide(1, true)
         }
       }, 16)
       stopFlight.current = () => {
@@ -79,8 +83,20 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
     }
   }, [origin, reducedMotion, story.id])
 
+  const paintGuide = (p: number, settled: boolean) => {
+    const shell = shellRef.current
+    const line = lineRef.current
+    if (reducedMotion) return
+    if (shell) shell.style.background = `rgba(8, 14, 26, ${settled ? 0.94 : 0.34 + p * 0.6})`
+    if (!line) return
+    line.style.top = `${window.innerHeight / 2}px`
+    line.style.width = settled ? '0px' : `${Math.min(88, 36 + p * 70)}vw`
+    line.style.opacity = settled || p < 0.06 ? '0' : '0.92'
+  }
+
   const requestClose = () => {
     if (phase === 'closing' || closed.current) return
+    window.dispatchEvent(new CustomEvent('photo-gather'))
     const node = photoRef.current
     stopFlight.current?.()
     if (node) node.style.transform = ''
@@ -104,6 +120,7 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
     const timer = window.setInterval(() => {
       const p = Math.min(1, (performance.now() - started) / 680)
       node.style.transform = `translate(${dx * p}px, ${dy * p}px) scale(${1 + (scale - 1) * p})`
+      paintGuide(1 - p, false)
       if (p < 1) return
       window.clearInterval(timer)
       if (closed.current) return
@@ -115,6 +132,7 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
 
   return (
     <div
+      ref={shellRef}
       className="viewer"
       data-phase={phase}
       role="dialog"
@@ -137,6 +155,7 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
         if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) onStep(dx < 0 ? 1 : -1)
       }}
     >
+      <div ref={lineRef} className="gold-line" />
       <div className="viewer-stage">
         {failed ? (
           <p className="viewer-miss">这张照片没有加载出来</p>

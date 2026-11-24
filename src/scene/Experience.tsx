@@ -17,6 +17,7 @@ type ExperienceProps = {
   activeId: string | null;
   controlsEnabled: boolean;
   onOpenStory: (id: string) => void;
+  burst: number;
 };
 
 export default function Experience({
@@ -28,6 +29,7 @@ export default function Experience({
   activeId,
   controlsEnabled,
   onOpenStory,
+  burst,
 }: ExperienceProps) {
   const [interacting, setInteracting] = useState(false);
 
@@ -48,7 +50,7 @@ export default function Experience({
         rotateSpeed={0.65}
         zoomSpeed={0.6}
         autoRotate={autoRotate && controlsEnabled && !interacting}
-        autoRotateSpeed={0.35}
+        autoRotateSpeed={1.15}
         minDistance={12}
         maxDistance={48}
         minPolarAngle={Math.PI / 3.2}
@@ -70,7 +72,7 @@ export default function Experience({
       />
 
       <group position={[0, quality.compact ? 0.32 : -0.15, 0]} scale={quality.compact ? 0.68 : 1}>
-        <ParticleField count={quality.foliage} mode={mode} motion={motion} />
+        <ParticleField count={quality.foliage} mode={mode} motion={motion} burst={burst} />
         <StoryPetals
           stories={stories}
           mode={mode}

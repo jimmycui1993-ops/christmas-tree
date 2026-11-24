@@ -180,10 +180,15 @@ function Petal({
     progress.current = MathUtils.damp(progress.current, target, 1.45, delta)
     const t = progress.current
     node.position.lerpVectors(scattered, formed, t)
-    if (motion > 0) node.position.y += Math.sin(state.clock.elapsedTime * 0.6 + index) * 0.03 * t
+    if (motion > 0) {
+      const bob = Math.sin(state.clock.elapsedTime * 0.85 + index * 1.4)
+      const sway = Math.cos(state.clock.elapsedTime * 0.62 + index * 0.9)
+      node.position.y += bob * 0.14 * t
+      node.position.x += sway * 0.05 * t
+    }
     node.scale.setScalar(1)
     node.lookAt(state.camera.position)
-    if (compact) {
+    {
       const greet = document.querySelector('.greeting')?.getBoundingClientRect()
       const dock = document.querySelector('.dock')?.getBoundingClientRect()
       const safe = {

@@ -23,6 +23,13 @@ export default function App() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [origin, setOrigin] = useState<ScreenBox | null>(null);
   const [albumOpen, setAlbumOpen] = useState(false);
+  const [burst, setBurst] = useState(0);
+
+  useEffect(() => {
+    const gather = () => setBurst(0);
+    window.addEventListener('photo-gather', gather);
+    return () => window.removeEventListener('photo-gather', gather);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -86,7 +93,6 @@ export default function App() {
       data-album={albumOpen ? 'open' : 'closed'}
     >
       <Canvas
-        frameloop={overlayOpen ? 'never' : 'always'}
         dpr={quality.dpr}
         gl={{
           antialias: quality.antialias,
@@ -109,10 +115,12 @@ export default function App() {
           stories={petals}
           activeId={openId}
           controlsEnabled={!overlayOpen}
+          burst={burst}
           onOpenStory={(id) => {
             const rect = petalRects.get(id);
             setOrigin(rect ? { ...rect } : null);
             setAlbumOpen(false);
+            setBurst(reducedMotion ? 0 : 1);
             setOpenId(id);
           }}
         />
@@ -171,6 +179,7 @@ export default function App() {
             };
             setOrigin(rect);
             setAlbumOpen(false);
+            setBurst(reducedMotion ? 0 : 1);
             setOpenId(id);
           }}
           onClose={() => setAlbumOpen(false)}
@@ -183,7 +192,10 @@ export default function App() {
           story={openStory}
           origin={origin}
           reducedMotion={reducedMotion}
-          onExited={() => setOpenId(null)}
+          onExited={() => {
+            setBurst(0);
+            setOpenId(null);
+          }}
           onStep={stepStory}
         />
       )}

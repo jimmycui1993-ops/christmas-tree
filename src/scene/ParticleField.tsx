@@ -15,6 +15,7 @@ const vertexShader = /* glsl */ `
   uniform float uScale;
   uniform float uMotion;
   uniform float uPixelRatio;
+  uniform float uBurst;
   varying vec3 vColor;
   varying float vRandom;
 
@@ -31,7 +32,9 @@ const vertexShader = /* glsl */ `
       cos(uTime * 0.12 + aRandom * 8.0),
       sin(uTime * 0.13 + aRandom * 10.0)
     ) * mix(0.28, 0.02, t) * uMotion;
-    vec3 pos = mix(position, aTarget, t) + drift;
+    vec3 pos = mix(position, aTarget, t);
+    pos = mix(pos, position, clamp(uBurst, 0.0, 1.0) * 0.4);
+    pos += drift * (1.0 + uBurst * 1.4);
     vec4 mv = modelViewMatrix * vec4(pos, 1.0);
     float dist = max(0.1, -mv.z);
     gl_PointSize = clamp(aSize * uScale * uPixelRatio * (52.0 / dist), 1.3, 6.0);
@@ -64,6 +67,7 @@ const GlowMaterial = shaderMaterial(
     uMotion: 1,
     uPixelRatio: 1,
     uTwinkle: 0.2,
+    uBurst: 0,
   },
   vertexShader,
   fragmentShader,
@@ -76,15 +80,17 @@ type GlowMaterialInstance = THREE.ShaderMaterial & {
   uMotion: number;
   uPixelRatio: number;
   uTwinkle: number;
+  uBurst: number;
 };
 
 type ParticleFieldProps = {
   count: number;
   mode: TreeMode;
   motion: number;
+  burst: number;
 };
 
-export default function ParticleField({ count, mode, motion }: ParticleFieldProps) {
+export default function ParticleField({ count, mode, motion, burst }: ParticleFieldProps) {
   const field = useMemo(() => createParticleField(count), [count]);
   const material = useMemo(() => {
     const next = new GlowMaterial() as GlowMaterialInstance;
@@ -107,6 +113,7 @@ export default function ParticleField({ count, mode, motion }: ParticleFieldProp
     material.uTime = state.clock.elapsedTime;
     material.uMotion = motion;
     material.uPixelRatio = state.gl.getPixelRatio();
+    material.uBurst = MathUtils.damp(material.uBurst, motion > 0 ? burst : 0, 2.4, delta);
   });
 
   return (

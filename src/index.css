@@ -202,7 +202,29 @@ button {
   background: rgba(8, 14, 26, 0.94);
 }
 
+.gold-line {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  height: 2px;
+  width: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(228, 211, 174, 0.2) 18%,
+    #e7d7b4 50%,
+    rgba(228, 211, 174, 0.2) 82%,
+    transparent 100%
+  );
+  box-shadow: 0 0 6px rgba(228, 211, 174, 0.55);
+}
+
 .viewer-stage {
+  z-index: 2;
   position: absolute;
   left: 88px;
   right: 88px;
