@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { petalRects, type ScreenBox, type Story } from './stories/album'
 
 type ViewerProps = {
@@ -11,243 +11,106 @@ type ViewerProps = {
   onStep: (direction: -1 | 1) => void
 }
 
-type Frame = { x: number; y: number; w: number; h: number }
-
-const smooth = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2)
-
-const containFrame = (story: Story, width: number, height: number): Frame => {
-  const maxW = Math.min(width * 0.88, 1100)
-  const maxH = Math.min(height * 0.78, 820)
-  const aspect = story.width / story.height
-  let w = maxW
-  let h = w / aspect
-  if (h > maxH) {
-    h = maxH
-    w = h * aspect
-  }
-  return { x: (width - w) / 2, y: (height - h) / 2 - 8, w, h }
-}
-
-const mix = (a: number, b: number, t: number) => a + (b - a) * t
-
 export function PhotoViewer({ stories, total, story, origin, reducedMotion, onExited, onStep }: ViewerProps) {
+  const photoRef = useRef<HTMLImageElement>(null)
+  const stopFlight = useRef<(() => void) | null>(null)
+  const flew = useRef(false)
+  const closed = useRef(false)
   const [failed, setFailed] = useState(false)
-  const [phase, setPhase] = useState<'opening' | 'open' | 'closing'>(reducedMotion ? 'open' : 'opening')
-  const phaseRef = useRef(phase)
-  const progressRef = useRef(reducedMotion ? 1 : 0)
-  const frameRef = useRef<HTMLDivElement>(null)
-  const coverRef = useRef<HTMLImageElement>(null)
-  const fullRef = useRef<HTMLImageElement>(null)
-  const scrimRef = useRef<HTMLDivElement>(null)
-  const dustRef = useRef<HTMLCanvasElement>(null)
-  const chromeRef = useRef<HTMLDivElement>(null)
+  const [phase, setPhase] = useState<'open' | 'closing'>('open')
+  const place = stories.findIndex((item) => item.id === story.id) + 1
   const start = useRef<{ x: number; y: number } | null>(null)
-  const closeTarget = useRef<ScreenBox | null>(origin)
-  const exited = useRef(false)
   const onExitedRef = useRef(onExited)
   onExitedRef.current = onExited
-  const place = stories.findIndex((item) => item.id === story.id) + 1
-
-  useLayoutEffect(() => {
-    const node = frameRef.current
-    if (!node || !origin) return
-    node.style.transform = `translate(${origin.x}px, ${origin.y}px)`
-    node.style.width = `${origin.w}px`
-    node.style.height = `${origin.h}px`
-    node.style.borderRadius = '50%'
-  }, [origin, story.id])
 
   useEffect(() => {
     setFailed(false)
   }, [story.id])
 
   useEffect(() => {
-    const switching = phaseRef.current === 'open' && progressRef.current > 0.85
-    phaseRef.current = reducedMotion || switching ? 'open' : 'opening'
-    progressRef.current = reducedMotion || switching ? 1 : 0
-    setPhase(phaseRef.current)
-    exited.current = false
-    let closeTimer = 0
-    const onPhotoClose = () => {
-      if (phaseRef.current === 'closing') return
-      phaseRef.current = 'closing'
-      setPhase('closing')
-      const node = frameRef.current
-      const to = petalRects.get(story.id) ?? origin
-      if (!node || !to || reducedMotion) {
-        finish()
-        return
-      }
-      const box = node.getBoundingClientRect()
-      const scale = Math.max(0.04, to.w / Math.max(1, box.width))
-      const tx = to.x
-      const ty = to.y + (to.h - box.height * scale) / 2
-      node.style.transformOrigin = '0 0'
-      node.style.width = `${box.width}px`
-      node.style.height = `${box.height}px`
-      const host = dustRef.current?.parentElement?.querySelector('.dust-host')
-      const dots = Array.from({ length: 14 }, () => {
-        const dot = document.createElement('i')
-        dot.className = 'dust-dot'
-        host?.appendChild(dot)
-        return dot
-      })
+    const onKey = () => requestClose()
+    window.addEventListener('photo-close', onKey)
+    return () => window.removeEventListener('photo-close', onKey)
+  })
+
+  useEffect(() => {
+    const node = photoRef.current
+    if (!node) return
+    const fit = () => {
+      const stage = node.parentElement
+      if (!stage || !node.naturalWidth) return
+      const box = stage.getBoundingClientRect()
+      const scale = Math.min(box.width / node.naturalWidth, box.height / node.naturalHeight)
+      node.style.width = `${Math.floor(node.naturalWidth * scale)}px`
+      node.style.height = `${Math.floor(node.naturalHeight * scale)}px`
+    }
+    const begin = () => {
+      fit()
+      if (flew.current || reducedMotion || !origin) return
+      const dest = node.getBoundingClientRect()
+      if (dest.width < 8 || dest.height < 8) return
+      flew.current = true
+      const dx = origin.x + origin.w / 2 - (dest.x + dest.width / 2)
+      const dy = origin.y + origin.h / 2 - (dest.y + dest.height / 2)
+      const scale = Math.min(1, Math.max(0.04, origin.w / dest.width))
       const started = performance.now()
-      let shown = 0
-      closeTimer = window.setInterval(() => {
-        const elapsed = Math.min(1, (performance.now() - started) / 800)
-        shown = Math.min(elapsed, shown + 0.04)
-        const s = 1 + (scale - 1) * shown
-        const x = box.x + (tx - box.x) * shown
-        const y = box.y + (ty - box.y) * shown
-        node.style.transform = `translate(${x}px, ${y}px) scale(${s})`
-        node.style.clipPath = shown > 0.62 ? 'circle(50% at 50% 50%)' : 'inset(0% round 18px)'
-        if (scrimRef.current) scrimRef.current.style.opacity = String(0.94 * (1 - shown))
-        if (coverRef.current) coverRef.current.style.opacity = String(Math.min(1, shown * 1.3))
-        if (fullRef.current) fullRef.current.style.opacity = String(1 - Math.min(1, shown * 1.1))
-        dots.forEach((dot, index) => {
-          const along = Math.min(1, Math.max(0, shown * 1.15 - index * 0.03))
-          const px = box.x + (tx - box.x) * along + box.width * (0.15 + (index % 5) * 0.16) * (1 - along)
-          const py = box.y + (ty - box.y) * along + ((index % 2 === 0 ? -18 : 18) * along)
-          dot.style.opacity = String(along * (1 - shown) * 0.9)
-          dot.style.transform = `translate(${px}px, ${py}px)`
-        })
-        if (shown >= 1) {
-          window.clearInterval(closeTimer)
-          finish()
+      const timer = window.setInterval(() => {
+        const p = Math.min(1, (performance.now() - started) / 680)
+        node.style.transform = `translate(${dx * (1 - p)}px, ${dy * (1 - p)}px) scale(${scale + (1 - scale) * p})`
+        if (p >= 1) {
+          window.clearInterval(timer)
+          node.style.transform = ''
         }
       }, 16)
+      stopFlight.current = () => {
+        window.clearInterval(timer)
+        node.style.transform = ''
+      }
     }
-    window.addEventListener('photo-close', onPhotoClose)
-    const dust: { x: number; y: number; vx: number; vy: number; life: number; color: string; size: number }[] = []
-    const openMark = performance.now()
-    const closeMark = 0
-    const closeFrom = 1
-    let last = openMark
-    let raf = 0
-    const colors = ['#f4efe6', '#d5e4ee', '#e7d7b4']
-
-    const finish = () => {
-      if (exited.current) return
-      exited.current = true
-      onExitedRef.current()
-    }
-
-    const draw = (now: number) => {
-      if (phaseRef.current === 'closing') {
-        raf = requestAnimationFrame(draw)
-        return
-      }
-      const dt = Math.min(34, now - last)
-      last = now
-      const closing = false
-      if (phaseRef.current === 'opening') {
-        const dur = reducedMotion ? 16 : 820
-        progressRef.current = Math.min(1, (now - openMark) / dur)
-      } else if (closing) {
-        const dur = reducedMotion ? 16 : 680
-        const t = Math.min(1, (now - closeMark) / dur)
-        progressRef.current = closeFrom * (1 - t)
-      }
-      const shown = closing ? closeFrom * (1 - smooth(Math.min(1, (now - closeMark) / (reducedMotion ? 16 : 680)))) : smooth(progressRef.current)
-      const viewW = window.innerWidth
-      const viewH = window.innerHeight
-      const from = closing ? closeTarget.current ?? origin : origin
-      const startBox = from ?? { x: viewW / 2 - 24, y: viewH / 2 - 24, w: 48, h: 48 }
-      const endBox = containFrame(story, viewW, viewH)
-      const frame = {
-        x: mix(startBox.x, endBox.x, shown),
-        y: mix(startBox.y, endBox.y, shown),
-        w: mix(startBox.w, endBox.w, shown),
-        h: mix(startBox.h, endBox.h, shown),
-      }
-      const node = frameRef.current
-      if (node) {
-        const radius = mix(Math.min(frame.w, frame.h) / 2, 18, shown)
-        node.style.transform = `translate(${frame.x}px, ${frame.y}px)`
-        node.style.width = `${frame.w}px`
-        node.style.height = `${frame.h}px`
-        node.style.borderRadius = `${radius}px`
-        node.style.boxShadow = `0 0 ${mix(28, 10, shown)}px rgba(213, 228, 238, ${mix(0.55, 0.18, shown)})`
-      }
-      if (coverRef.current) coverRef.current.style.opacity = String(1 - Math.min(1, Math.max(0, (shown - 0.42) / 0.38)))
-      if (fullRef.current) fullRef.current.style.opacity = String(Math.min(1, Math.max(0, (shown - 0.28) / 0.4)))
-      if (scrimRef.current) scrimRef.current.style.opacity = String(0.94 * shown)
-      if (chromeRef.current) chromeRef.current.style.opacity = String(Math.min(1, Math.max(0, (shown - 0.72) / 0.22)))
-
-      const canvas = dustRef.current
-      if (canvas && !reducedMotion) {
-        const dpr = Math.min(window.devicePixelRatio || 1, 1.5)
-        if (canvas.width !== Math.floor(viewW * dpr) || canvas.height !== Math.floor(viewH * dpr)) {
-          canvas.width = Math.floor(viewW * dpr)
-          canvas.height = Math.floor(viewH * dpr)
-          canvas.style.width = `${viewW}px`
-          canvas.style.height = `${viewH}px`
-        }
-        const ctx = canvas.getContext('2d')
-        if (ctx) {
-          ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-          ctx.clearRect(0, 0, viewW, viewH)
-          const spawn = phaseRef.current === 'open' ? 1 : 5
-          for (let i = 0; i < spawn; i += 1) {
-            const edge = Math.random() * (frame.w + frame.h) * 2
-            let x = frame.x
-            let y = frame.y
-            if (edge < frame.w) x += edge
-            else if (edge < frame.w + frame.h) {
-              x += frame.w
-              y += edge - frame.w
-            } else if (edge < frame.w * 2 + frame.h) {
-              x += frame.w - (edge - frame.w - frame.h)
-              y += frame.h
-            } else y += frame.h - (edge - frame.w * 2 - frame.h)
-            const angle = Math.random() * Math.PI * 2
-            const speed = closing ? -0.4 - Math.random() * 0.8 : 0.25 + Math.random() * 0.9
-            dust.push({
-              x,
-              y,
-              vx: Math.cos(angle) * speed,
-              vy: Math.sin(angle) * speed - 0.15,
-              life: 1,
-              color: colors[Math.floor(Math.random() * colors.length)],
-              size: Math.random() < 0.08 ? 2.2 : 1.1,
-            })
-          }
-          for (let i = dust.length - 1; i >= 0; i -= 1) {
-            const bit = dust[i]
-            bit.x += bit.vx * dt * 0.06
-            bit.y += bit.vy * dt * 0.06
-            bit.life -= dt / (closing ? 520 : 760)
-            if (bit.life <= 0) {
-              dust.splice(i, 1)
-              continue
-            }
-            ctx.globalAlpha = bit.life * (closing ? 0.8 : 0.7)
-            ctx.fillStyle = bit.color
-            ctx.beginPath()
-            ctx.arc(bit.x, bit.y, bit.size, 0, Math.PI * 2)
-            ctx.fill()
-          }
-          ctx.globalAlpha = 1
-        }
-      }
-
-      if (phaseRef.current === 'opening' && progressRef.current >= 1) {
-        phaseRef.current = 'open'
-        setPhase('open')
-      }
-      raf = requestAnimationFrame(draw)
-    }
-    raf = requestAnimationFrame(draw)
+    node.addEventListener('load', begin)
+    window.addEventListener('resize', fit)
+    const frame = requestAnimationFrame(() => requestAnimationFrame(begin))
     return () => {
-      cancelAnimationFrame(raf)
-      window.clearInterval(closeTimer)
-      window.removeEventListener('photo-close', onPhotoClose)
+      cancelAnimationFrame(frame)
+      node.removeEventListener('load', begin)
+      window.removeEventListener('resize', fit)
+      stopFlight.current?.()
+      node.style.transform = ''
     }
-  }, [origin, reducedMotion, story])
+  }, [origin, reducedMotion, story.id])
 
   const requestClose = () => {
-    window.dispatchEvent(new CustomEvent('photo-close'))
+    if (phase === 'closing' || closed.current) return
+    const node = photoRef.current
+    stopFlight.current?.()
+    if (node) node.style.transform = ''
+    const to = petalRects.get(story.id) ?? origin
+    if (!node || !to || reducedMotion) {
+      closed.current = true
+      onExitedRef.current()
+      return
+    }
+    const from = node.getBoundingClientRect()
+    if (from.width < 8) {
+      closed.current = true
+      onExitedRef.current()
+      return
+    }
+    setPhase('closing')
+    const dx = to.x + to.w / 2 - (from.x + from.width / 2)
+    const dy = to.y + to.h / 2 - (from.y + from.height / 2)
+    const scale = Math.max(0.04, Math.min(1, to.w / from.width))
+    const started = performance.now()
+    const timer = window.setInterval(() => {
+      const p = Math.min(1, (performance.now() - started) / 680)
+      node.style.transform = `translate(${dx * p}px, ${dy * p}px) scale(${1 + (scale - 1) * p})`
+      if (p < 1) return
+      window.clearInterval(timer)
+      if (closed.current) return
+      closed.current = true
+      onExitedRef.current()
+    }, 16)
+    stopFlight.current = () => window.clearInterval(timer)
   }
 
   return (
@@ -258,60 +121,52 @@ export function PhotoViewer({ stories, total, story, origin, reducedMotion, onEx
       aria-modal="true"
       aria-label={`照片 ${story.index} / ${total}`}
       onPointerDown={(event) => {
-        if (phaseRef.current !== 'open') return
-        if (event.target === event.currentTarget) start.current = null
+        if (phase !== 'open') return
+        if ((event.target as HTMLElement).closest('button')) start.current = null
         else start.current = { x: event.clientX, y: event.clientY }
       }}
       onPointerUp={(event) => {
-        if (phaseRef.current !== 'open') return
-        if (event.target === event.currentTarget) {
+        if (phase !== 'open' || !start.current) return
+        if ((event.target as HTMLElement).closest('button')) return
+        const dx = event.clientX - start.current.x
+        const dy = event.clientY - start.current.y
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8 && event.target === event.currentTarget) {
           requestClose()
           return
         }
-        if (!start.current) return
-        const dx = event.clientX - start.current.x
-        const dy = event.clientY - start.current.y
         if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy)) onStep(dx < 0 ? 1 : -1)
       }}
     >
-      <div ref={scrimRef} className="viewer-scrim" onPointerUp={requestClose} />
-      <canvas ref={dustRef} className="viewer-dust" />
-      <div className="dust-host" />
-      <div ref={frameRef} className="reveal">
+      <div className="viewer-stage">
         {failed ? (
           <p className="viewer-miss">这张照片没有加载出来</p>
         ) : (
-          <>
-            <img ref={coverRef} className="reveal-cover" src={story.thumb} alt="" draggable={false} />
-            <img
-              ref={fullRef}
-              className="reveal-full"
-              src={story.src}
-              alt=""
-              draggable={false}
-              onError={() => setFailed(true)}
-            />
-          </>
+          <img
+            ref={photoRef}
+            className="viewer-photo"
+            src={story.src}
+            alt=""
+            draggable={false}
+            onError={() => setFailed(true)}
+          />
         )}
       </div>
-      <div ref={chromeRef} className="viewer-chrome">
-        <button type="button" className="viewer-close" onClick={requestClose} autoFocus>
-          关闭
-        </button>
-        <button type="button" className="viewer-nav viewer-prev" onClick={() => onStep(-1)} aria-label="上一张">
-          上一张
-        </button>
-        <button type="button" className="viewer-nav viewer-next" onClick={() => onStep(1)} aria-label="下一张">
-          下一张
-        </button>
-        <p className="viewer-caption">
-          <span>{story.era}</span>
-          <span>
-            {story.index} / {total}
-            {place > 0 && stories.length !== total ? ` · 本组 ${place} / ${stories.length}` : ''}
-          </span>
-        </p>
-      </div>
+      <button type="button" className="viewer-close" onClick={requestClose} autoFocus>
+        关闭
+      </button>
+      <button type="button" className="viewer-nav viewer-prev" onClick={() => onStep(-1)} aria-label="上一张">
+        上一张
+      </button>
+      <button type="button" className="viewer-nav viewer-next" onClick={() => onStep(1)} aria-label="下一张">
+        下一张
+      </button>
+      <p className="viewer-caption">
+        <span>{story.era}</span>
+        <span>
+          {story.index} / {total}
+          {place > 0 && stories.length !== total ? ` · 本组 ${place} / ${stories.length}` : ''}
+        </span>
+      </p>
     </div>
   )
 }

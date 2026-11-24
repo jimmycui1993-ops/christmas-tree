@@ -86,6 +86,7 @@ export default function App() {
       data-album={albumOpen ? 'open' : 'closed'}
     >
       <Canvas
+        frameloop={overlayOpen ? 'never' : 'always'}
         dpr={quality.dpr}
         gl={{
           antialias: quality.antialias,
