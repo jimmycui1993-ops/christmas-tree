@@ -8,7 +8,7 @@
 
 上游 README 写明以 MIT 许可发布。本仓库保留该许可，并在 [LICENSE](LICENSE) 中注明出处。
 
-这个演示**不加载任何照片**，也**不会打开摄像头**。鼠标或触控就够了。照片和故事可以以后再接，当前没有相框，也没有图片请求。
+公开仓库里没有照片。若本机存在 `private/stories/manifest.json`，可以运行 `npm run stories`，把同一来源的 web 图和缩略图放到被 git 忽略的 `public/stories/`。没有这份清单时，树照常运行，不会出现空相框。应用只读取同源的 `stories/album.json`，不会把图片发到外部图床。`laurawithlove.cn` 尚未在这里配置，当前也没有公开部署。
 
 ## 运行
 
@@ -42,4 +42,4 @@ npm run preview
 
 ## 说明
 
-上游项目里的拍立得照片、礼物、手势识别和调试摄像头都没有接到这个场景里。`@mediapipe/tasks-vision` 仍留在依赖清单中，但应用不会引用它，也不会调用 `getUserMedia`。
+照片热点只出现在清单加载成功之后，数量少于全部照片，点开后按原比例完整查看。分组名称来自清单里的 `era` 字段。`@mediapipe/tasks-vision` 仍留在依赖清单中，但应用不会引用它，也不会调用 `getUserMedia`。

@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Private photographs and the locally staged album. Not for the public repository.
+/private/
+/public/stories/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { OrbitControls, PerspectiveCamera, Stars } from '@react-three/drei';
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
 import { type Quality, type TreeMode } from '../treeConfig';
+import type { Story } from '../stories/album';
 import Atmosphere from './Atmosphere';
 import ParticleField, { ForegroundBokeh } from './ParticleField';
+import StoryPetals from './StoryPetals';
 import TopStar from './TopStar';
 
 type ExperienceProps = {
@@ -11,21 +13,33 @@ type ExperienceProps = {
   autoRotate: boolean;
   motion: number;
   quality: Quality;
+  stories: Story[];
+  controlsEnabled: boolean;
+  onOpenStory: (id: string) => void;
 };
 
-export default function Experience({ mode, autoRotate, motion, quality }: ExperienceProps) {
+export default function Experience({
+  mode,
+  autoRotate,
+  motion,
+  quality,
+  stories,
+  controlsEnabled,
+  onOpenStory,
+}: ExperienceProps) {
   const [interacting, setInteracting] = useState(false);
 
   return (
     <>
       <PerspectiveCamera makeDefault position={[0.9, 0.15, 19.2]} fov={28} near={0.1} far={200} />
       <OrbitControls
+        enabled={controlsEnabled}
         enablePan={false}
         enableDamping
         dampingFactor={0.08}
         rotateSpeed={0.65}
         zoomSpeed={0.6}
-        autoRotate={autoRotate && !interacting}
+        autoRotate={autoRotate && controlsEnabled && !interacting}
         autoRotateSpeed={0.35}
         minDistance={12}
         maxDistance={48}
@@ -49,6 +63,7 @@ export default function Experience({ mode, autoRotate, motion, quality }: Experi
 
       <group position={[0, -0.15, 0]}>
         <ParticleField count={quality.foliage} mode={mode} motion={motion} />
+        <StoryPetals stories={stories} mode={mode} motion={motion} onOpen={onOpenStory} />
         <TopStar mode={mode} />
       </group>
       <ForegroundBokeh count={quality.bokeh} motion={motion} />
